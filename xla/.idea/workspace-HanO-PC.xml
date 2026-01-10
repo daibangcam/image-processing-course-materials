@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="9c25a94b-a076-412b-87b2-6342a44a97ff" name="Changes" comment="" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 6
+}</component>
+  <component name="ProjectId" id="32An2KGxkC2eiao7DU8AWgdBeuN" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.code.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/daiba/OneDrive - T_Family/Tasks/xla&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\daiba\OneDrive - T_Family\Tasks\xla" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-b598e85cdad2-JavaScript-PY-252.25557.130" />
+        <option value="bundled-python-sdk-1bde30d8e611-7b97d883f26b-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.25557.130" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="9c25a94b-a076-412b-87b2-6342a44a97ff" name="Changes" comment="" />
+      <created>1756872036748</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1756872036748</updated>
+      <workItem from="1756883150043" duration="882000" />
+      <workItem from="1756884060480" duration="3165000" />
+      <workItem from="1756887555296" duration="115000" />
+      <workItem from="1756887690484" duration="37000" />
+      <workItem from="1756887753618" duration="288000" />
+      <workItem from="1756888069076" duration="233000" />
+      <workItem from="1756888317868" duration="50000" />
+      <workItem from="1756948835630" duration="3215000" />
+      <workItem from="1756952093303" duration="77000" />
+      <workItem from="1757380751474" duration="1535000" />
+      <workItem from="1757384871415" duration="1578000" />
+      <workItem from="1757915081438" duration="6176000" />
+      <workItem from="1758597178810" duration="1464000" />
+      <workItem from="1758869932318" duration="3002000" />
+      <workItem from="1758874227315" duration="22000" />
+      <workItem from="1758874268149" duration="2576000" />
+      <workItem from="1758877340861" duration="783000" />
+      <workItem from="1758935935473" duration="2738000" />
+      <workItem from="1758942596655" duration="679000" />
+      <workItem from="1758943375263" duration="856000" />
+      <workItem from="1758953789310" duration="1578000" />
+      <workItem from="1759372344370" duration="347000" />
+      <workItem from="1759372953287" duration="850000" />
+      <workItem from="1761534678931" duration="355000" />
+      <workItem from="1762077278156" duration="1198000" />
+      <workItem from="1762594856460" duration="507000" />
+      <workItem from="1762599356529" duration="1785000" />
+      <workItem from="1762601171702" duration="406000" />
+      <workItem from="1762601629192" duration="1587000" />
+      <workItem from="1762603247221" duration="888000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/xla$code.coverage" NAME="code Coverage Results" MODIFIED="1762604061972" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+  </component>
+</project>

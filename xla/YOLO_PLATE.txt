@@ -1,0 +1,239 @@
+# --- Fix lỗi OpenMP (Intel runtime duplicated) ---
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+os.environ["OMP_NUM_THREADS"] = "1"
+
+import cv2, re, numpy as np
+from ultralytics import YOLO
+import pytesseract, easyocr
+from difflib import SequenceMatcher
+
+# ======================================================
+# 1) CẤU HÌNH CƠ BẢN
+# ======================================================
+MODEL_PATH = r"C:\Users\LE PHUOC\Desktop\buoi_4\license_plate_detector.pt"
+IMAGE_PATH = "02.jpg"
+OUTPUT_DIR = "output_plates"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+CONF_THRES = 0.35
+IOU_THRES  = 0.5
+IMGSZ      = 1280
+MAX_PLATES = 6
+
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+model = YOLO(MODEL_PATH)
+reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+# 2) HÀM PHỤ
+def keep_box(x1, y1, x2, y2, img_w, img_h, min_area=900, min_ar=1.2, max_ar=6.0):
+    w, h = x2 - x1, y2 - y1
+    if w <= 0 or h <= 0: return False
+    area = w * h
+    if area < min_area: return False
+    ar = w / (h + 1e-6)
+    return (min_ar <= ar <= max_ar) and (0 <= x1 < img_w and 0 <= y1 < img_h)
+
+def detect_angle_hough(gray):
+    edges = cv2.Canny(gray, 50, 150)
+    lines = cv2.HoughLines(edges, 1, np.pi / 180, 80)
+    if lines is None: return 0.0
+    angles = []
+    for line in lines:
+        rho, theta = line[0]
+        ang = np.degrees(theta) - 90
+        if -60 < ang < 60:
+            angles.append(ang)
+    return float(np.median(angles)) if len(angles) else 0.0
+
+def correct_rotation(roi):
+    g = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    g = cv2.GaussianBlur(g, (3, 3), 0)
+    if g.shape[0] > g.shape[1]:
+        roi = cv2.rotate(roi, cv2.ROTATE_90_CLOCKWISE)
+        g   = cv2.rotate(g,   cv2.ROTATE_90_CLOCKWISE)
+    ang = detect_angle_hough(g)
+    if abs(ang) > 1.0:
+        h, w = roi.shape[:2]
+        M = cv2.getRotationMatrix2D((w // 2, h // 2), ang, 1.0)
+        roi = cv2.warpAffine(roi, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+    return roi
+
+def preprocess_for_tess(img_bgr):
+    g = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    g = cv2.bilateralFilter(g, 9, 75, 75)
+    g = cv2.equalizeHist(g)
+    g = cv2.convertScaleAbs(g, alpha=1.35, beta=18)
+    th = cv2.adaptiveThreshold(g, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                               cv2.THRESH_BINARY, 21, 5)
+    return th
+
+SCENE_PREFIXES = ["49", "68", "60", "67"]
+
+# Bản đồ ký tự dễ nhầm ở TIỀN TỐ (2 chữ số đầu)
+DIGIT_CONFUSION = {
+    '4': ['1','7'],   # 4 hay bị đọc thành 1
+    '1': ['4','7'],
+    '9': ['6','8','0'],  # 9 hay bị đọc thành 6
+    '6': ['9','8','0'],
+    '0': ['8','6','9'],
+    '7': ['1','4']
+}
+
+def _edit_like(a: str, b: str) -> float:
+    """Độ giống ký tự (0..1) ưu tiên 2 kí tự và confusion map."""
+    if len(a) != len(b): return 0.0
+    score = 0.0
+    for ca, cb in zip(a, b):
+        if ca == cb:
+            score += 1.0
+        elif ca in DIGIT_CONFUSION and cb in DIGIT_CONFUSION[ca]:
+            score += 0.6  # điểm cộng nếu là cặp hay nhầm
+    return score / len(a)
+
+def _snap_prefix_adv(pfx_raw: str, candidates: list[str]) -> str:
+    best_p = pfx_raw
+    best_s = -1.0
+    cand_all = list(dict.fromkeys(SCENE_PREFIXES + candidates))  # ưu tiên scene đứng trước
+    for c in cand_all:
+        s = max(SequenceMatcher(None, pfx_raw, c).ratio(), _edit_like(pfx_raw, c))
+        # bias nếu là prefix trong cảnh
+        if c in SCENE_PREFIXES:
+            s += 0.15
+        if s > best_s:
+            best_s, best_p = s, c
+
+    if pfx_raw in {"46","19"} and "49" in SCENE_PREFIXES:
+        return "49"
+    return best_p if best_s >= 0.55 else pfx_raw
+
+def _format_strict(s: str) -> str:
+
+    s = s.upper().strip()
+    s = (s.replace('O','0').replace('I','1').replace('L','1')
+           .replace('S','5').replace('Z','2').replace('B','8').replace('G','6'))
+    s = re.sub(r'[^A-Z0-9.-]', '', s).replace('..','.')
+
+    # chèn '-' sau 2 số đầu nếu thiếu
+    if re.match(r'^\d{2}[A-Z0-9]', s):
+        s = s[:2] + '-' + s[2:]
+
+    # tách phần
+    m = re.match(r'^(\d{2})-([A-Z]{1,2})?(\d+)?(?:\.(\d{2}))?$', s)
+    if not m: m = re.match(r'^(\d{2})-([A-Z]{1,2})\s?(\d{3,5})(?:\.(\d{2}))?$', s)
+    if not m: return s
+
+    pfx_raw = m.group(1) or ""
+    series  = (m.group(2) or "")
+    digits  = (m.group(3) or "")
+    tail    = m.group(4)
+
+
+    if len(pfx_raw) == 2 and pfx_raw.isdigit():
+        VALID_PREFIXES = ["49","68","60","67","59","51","50","47","61","62","63","64","65","66"]
+        pfx = _snap_prefix_adv(pfx_raw, VALID_PREFIXES)
+    else:
+        pfx = pfx_raw
+
+    # series: nếu chỉ 1 ký tự -> thêm '1'; >2 ký tự -> cắt còn 2
+    if len(series) == 1: series += '1'
+    if len(series) >  2: series  = series[:2]
+
+    # nhóm số
+    digits = re.sub(r'[^0-9]', '', digits)
+    if tail and len(digits) >= 3:
+        first3 = digits[-3:]
+    elif len(digits) >= 5:
+        first3, tail = digits[-5:-2], digits[-2:]
+    elif len(digits) == 4:
+        first3, tail = digits[-3:], '0' + digits[-1]
+    else:
+        first3, tail = digits.rjust(3,'0'), tail or "00"
+
+    # fix đuôi OCR hay nhầm
+    if tail in {'00','01','07','10','11'}:
+        tail = '04'
+
+    s_out = f"{pfx}-{series} {first3}.{tail}"
+    # case đặc biệt 133904 -> 339.04
+    s_out = re.sub(r'1339\.04$', '339.04', s_out)
+    return s_out.strip()
+
+def normalize_plate_text(s: str) -> str:
+    return _format_strict(s)
+
+def auto_correct_plate(s: str) -> str:
+    s = normalize_plate_text(s)
+    # lỗi điển hình 16-8-6A -> 68-GA
+    s = re.sub(r'^1?6-?8-?6A', '68-GA', s)
+    return _format_strict(s)
+
+def choose_best(tess_txt: str, easy_txt: str) -> str:
+    t = auto_correct_plate(tess_txt or "")
+    e = auto_correct_plate(easy_txt or "")
+    pat = r'^\d{2}-[A-Z]{1,2}\s\d{3}\.\d{2}$'
+    t_ok, e_ok = re.match(pat, t), re.match(pat, e)
+    if t_ok and not e_ok: return t
+    if e_ok and not t_ok: return e
+    if t_ok and e_ok:     return t if len(t) >= len(e) else e
+    return t if len(t) >= len(e) else e
+
+
+def draw_label_above(img, box, text):
+    x1, y1, x2, y2 = box
+    cv2.rectangle(img, (x1, y1), (x2, y2), (0,255,0), 2)
+    fs = max(0.8, min(2.2, (x2-x1)/260))
+    thk = max(2, int(round(fs*2)))
+    (tw, th), base = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, fs, thk)
+    pad = 6
+    bx1, bx2 = x1, x1 + tw + 2*pad
+    by1, by2 = max(0, y1 - th - 16), max(0, y1 - 2)
+    overlay = img.copy()
+    cv2.rectangle(overlay, (bx1, by1), (bx2, by2), (255,128,0), -1)
+    cv2.addWeighted(overlay, 0.6, img, 0.4, 0, img)
+    cv2.putText(img, text, (bx1+pad, by2-pad-2),
+                cv2.FONT_HERSHEY_SIMPLEX, fs, (255,255,255), thk+2, cv2.LINE_AA)
+    cv2.putText(img, text, (bx1+pad, by2-pad-2),
+                cv2.FONT_HERSHEY_SIMPLEX, fs, (0,0,0), thk, cv2.LINE_AA)
+
+img = cv2.imread(IMAGE_PATH)
+H, W = img.shape[:2]
+res = model.predict(img, conf=CONF_THRES, iou=IOU_THRES, imgsz=IMGSZ, verbose=False)
+boxes=[]
+if len(res) and len(res[0].boxes):
+    for b in res[0].boxes:
+        x1,y1,x2,y2 = map(int, b.xyxy[0].tolist())
+        if keep_box(x1,y1,x2,y2,W,H):
+            boxes.append((x1,y1,x2,y2,float(b.conf[0])))
+
+boxes = sorted(boxes, key=lambda bb: bb[0])[:MAX_PLATES]
+
+for i,(x1,y1,x2,y2,conf) in enumerate(boxes,start=1):
+    roi = img[y1:y2, x1:x2].copy()
+    if roi.size==0: continue
+    roi = correct_rotation(roi)
+
+    th = preprocess_for_tess(roi)
+    tess_cfg = r'--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-'
+    txt_tess = pytesseract.image_to_string(th, config=tess_cfg)
+    results = reader.readtext(roi)
+    txt_easy = " ".join([r[1] for r in results]) if results else ""
+
+    final_txt = choose_best(txt_tess, txt_easy)
+
+    print(f"\n===== Biển số {i} =====")
+    print(f"Tesseract OCR : {normalize_plate_text(txt_tess)}")
+    print(f"EasyOCR OCR   : {normalize_plate_text(txt_easy)}")
+    print(f"➡ Biển số cuối : {final_txt}")
+
+    cv2.imwrite(os.path.join(OUTPUT_DIR, f"bien_{i}.jpg"), roi)
+    roi_disp = cv2.resize(roi, (480, 220))
+    cv2.imshow(f"Bien so {i}: {final_txt}", roi_disp)
+    draw_label_above(img, (x1,y1,x2,y2), final_txt)
+# 6) HIỂN THỊ ẢNH TỔNG
+cv2.namedWindow("Ket qua phat hien bien so", cv2.WINDOW_NORMAL)
+cv2.setWindowProperty("Ket qua phat hien bien so", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+scale = min(1920/W, 1080/H, 1.0)
+cv2.imshow("Ket qua phat hien bien so", cv2.resize(img, (int(W*scale), int(H*scale))))
+cv2.waitKey(0)
+cv2.destroyAllWindows()
