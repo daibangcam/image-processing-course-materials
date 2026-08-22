@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giáo cụ dạy học môn Xử lý ảnh</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            text-align: center; 
+            background: #2b2b2b; 
+            color: #fff;
+            padding: 20px; 
+            margin: 0;
+        }
+        h2 { color: #00d2ff; }
+        p { color: #ccc; margin-bottom: 20px; font-size: 1.1em;}
+        
+        .flipbook-container { 
+            margin: 20px auto; 
+            width: 800px;
+            height: 450px;
+            /* Tạo hình dáng cuốn sổ */
+            background: #fdfdfd; 
+            border-radius: 5px 20px 20px 5px;
+            box-shadow: 15px 15px 30px rgba(0,0,0,0.5), inset -5px 0 10px rgba(0,0,0,0.05);
+            border-left: 30px solid #8b0000; /* Gáy sổ màu đỏ đô */
+            position: relative;
+            overflow: hidden;
+        }
+
+        #main-canvas {
+            display: block;
+        }
+
+        .controls { 
+            margin: 20px auto; 
+            padding: 25px; 
+            background: #333; 
+            display: inline-block; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5); 
+            text-align: left;
+            width: 750px;
+        }
+
+        .scrubber-box {
+            background: #444;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 5px solid #00d2ff;
+        }
+
+        .slider-container { margin-top: 15px; display: flex; align-items: center; justify-content: space-between;}
+        
+        input[type=range] { 
+            flex-grow: 1; 
+            margin: 0 15px; 
+            cursor: pointer; 
+            accent-color: #00d2ff; 
+            height: 8px;
+        }
+        
+        button { 
+            padding: 12px 12px; 
+            cursor: pointer; 
+            border: none; 
+            border-radius: 6px; 
+            background: #28a745; 
+            color: white; 
+            font-size: 16px;
+            font-weight: bold; 
+            transition: 0.2s;
+            width: 150px;
+        }
+        button:hover { background: #1e7e34; transform: translateY(-2px); }
+        button.stop { background: #dc3545; }
+        button.stop:hover { background: #a71d2a; }
+        
+        .label-text { font-size: 18px; font-weight: bold; width: 180px;}
+        .val-text { font-size: 20px; font-weight: bold; color: #00d2ff; width: 50px; text-align: left;}
+    </style>
+</head>
+<body>
+
+    <h2>📓 Video thực chất là chuỗi các ảnh được lật liên tiếp, dựa vào hiện tượng lưu ảnh của mắt người</h2>
+    <p>Hãy thử tự tay "vuốt" cuốn sổ để thấy hình ảnh chuyển động, sau đó cho máy tự lật nhé!</p>
+
+    <div class="flipbook-container">
+        <canvas id="main-canvas" width="770" height="450"></canvas>
+    </div>
+
+    <div class="controls">
+        
+        <div class="scrubber-box">
+            <div style="color: #00d2ff; font-size: 14px; text-transform: uppercase; font-weight: bold;">LẬT THỦ CÔNG (TỪNG ẢNH 1)</div>
+            <div class="slider-container">
+                <span class="label-text">👉 Vuốt tập tranh:</span>
+                <input type="range" id="frame-slider" min="1" max="60" value="1">
+                <span class="val-text" id="frame-val">1</span>
+            </div>
+        </div>
+
+        <div class="scrubber-box" style="border-left-color: #28a745; margin-bottom: 0;">
+            <div style="color: #28a745; font-size: 14px; text-transform: uppercase; font-weight: bold;">LẬT TỰ ĐỘNG - ĐỦ NHANH SẼ THẤY ẢNH CHUYỂN ĐỘNG THÀNH VIDEO</div>
+            <div class="slider-container">
+                <span class="label-text">⚡ Tốc độ lật (FPS):</span>
+                <input type="range" id="fps-slider" min="1" max="60" value="10">
+                <span class="val-text" id="fps-val">8</span>
+                <button id="btn-play">▶ Tự động lật</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const canvas = document.getElementById('main-canvas');
+        const ctx = canvas.getContext('2d');
+        const frameSlider = document.getElementById('frame-slider');
+        const frameVal = document.getElementById('frame-val');
+        const fpsSlider = document.getElementById('fps-slider');
+        const fpsVal = document.getElementById('fps-val');
+        const btnPlay = document.getElementById('btn-play');
+
+        const TOTAL_FRAMES = 60;
+        let currentFrame = 1;
+        let isPlaying = false;
+        let fps = 10;
+        let lastTime = 0;
+
+        // Mảng lưu trữ 60 bức tranh tĩnh
+        const framesData = [];
+
+        // HÀM TẠO SẴN 60 BỨC TRANH (Render một lần duy nhất lúc tải trang)
+        function generateFrames() {
+            for (let i = 1; i <= TOTAL_FRAMES; i++) {
+                // Tạo một canvas ảo (như 1 tờ giấy trắng)
+                const offscreen = document.createElement('canvas');
+                offscreen.width = canvas.width;
+                offscreen.height = canvas.height;
+                const oCtx = offscreen.getContext('2d');
+
+                // 1. Vẽ nền giấy nháp ô ly (Grid)
+                oCtx.fillStyle = '#fdfdfd';
+                oCtx.fillRect(0, 0, offscreen.width, offscreen.height);
+                oCtx.strokeStyle = '#e0e0e0';
+                oCtx.lineWidth = 1;
+                for(let x = 0; x < offscreen.width; x += 30) { oCtx.beginPath(); oCtx.moveTo(x, 0); oCtx.lineTo(x, offscreen.height); oCtx.stroke(); }
+                for(let y = 0; y < offscreen.height; y += 30) { oCtx.beginPath(); oCtx.moveTo(0, y); oCtx.lineTo(offscreen.width, y); oCtx.stroke(); }
+
+                // Tính toán vị trí chuyển động dựa trên số trang i
+                let progress = i / TOTAL_FRAMES; // 0.0 to 1.0
+                let pacmanX = 100 + progress * 500;
+                
+                // Hiệu ứng há/ngậm miệng lặp lại
+                let mouthOpen = Math.abs(Math.sin(progress * Math.PI * 10)) * 0.25; 
+
+                // 2. Vẽ Pacman
+                oCtx.beginPath();
+                oCtx.arc(pacmanX, 225, 60, mouthOpen * Math.PI, (2 - mouthOpen) * Math.PI);
+                oCtx.lineTo(pacmanX, 225);
+                oCtx.fillStyle = '#FFD700';
+                oCtx.fill();
+                oCtx.closePath();
+
+                // Vẽ mắt Pacman
+                oCtx.beginPath();
+                oCtx.arc(pacmanX + 10, 195, 8, 0, Math.PI*2);
+                oCtx.fillStyle = '#000';
+                oCtx.fill();
+
+                // 3. Vẽ viên kẹo bị ăn
+                if (pacmanX < 450) {
+                    oCtx.beginPath(); oCtx.arc(480, 225, 15, 0, Math.PI*2); oCtx.fillStyle = '#FF4500'; oCtx.fill();
+                }
+
+                // 4. Đóng mộc số trang siêu to ở góc dưới (Minh chứng đây là ảnh tĩnh)
+                oCtx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                oCtx.font = 'bold 120px Courier New';
+                oCtx.textAlign = 'right';
+                oCtx.fillText(`#${i}`, offscreen.width - 40, offscreen.height - 40);
+
+                // Ghi chú góc trên
+                oCtx.fillStyle = '#333';
+                oCtx.font = 'bold 24px Arial';
+                oCtx.textAlign = 'left';
+                oCtx.fillText(`Tấm ảnh số: ${i} / ${TOTAL_FRAMES}`, 30, 50);
+
+                // Lưu tờ giấy này vào mảng
+                framesData[i] = offscreen;
+            }
+        }
+
+        // Hàm dán tờ giấy thứ 'index' lên màn hình
+        function drawFrame(index) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(framesData[index], 0, 0);
+        }
+
+        // BẮT SỰ KIỆN GIAO DIỆN
+        frameSlider.addEventListener('input', (e) => {
+            currentFrame = parseInt(e.target.value);
+            frameVal.innerText = currentFrame;
+            drawFrame(currentFrame); // Vẽ ngay lập tức khi vuốt
+            // Tạm dừng Auto-play nếu đang vuốt tay
+            if(isPlaying) document.getElementById('btn-play').click();
+        });
+
+        fpsSlider.addEventListener('input', (e) => {
+            fps = e.target.value;
+            fpsVal.innerText = fps;
+        });
+
+        btnPlay.addEventListener('click', (e) => {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                e.target.innerText = "⏸ Dừng lật";
+                e.target.className = "stop";
+                requestAnimationFrame(loop);
+            } else {
+                e.target.innerText = "▶ Tự động lật";
+                e.target.className = "";
+            }
+        });
+
+        // VÒNG LẶP CHÍNH (Auto-play)
+        function loop(timestamp) {
+            if (!isPlaying) return;
+
+            if (timestamp - lastTime >= 1000 / fps) {
+                currentFrame++;
+                if (currentFrame > TOTAL_FRAMES) currentFrame = 1; // Lặp lại từ đầu
+                
+                // Cập nhật giao diện
+                frameSlider.value = currentFrame;
+                frameVal.innerText = currentFrame;
+                drawFrame(currentFrame);
+
+                lastTime = timestamp;
+            }
+            requestAnimationFrame(loop);
+        }
+
+        // Khởi động
+        generateFrames();
+        drawFrame(1);
+
+    </script>
+</body>
+</html>
